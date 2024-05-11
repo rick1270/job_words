@@ -3,7 +3,7 @@
     "keyword": "data",
     "location": ["Remote"],
     "api_key": "scraper_api",
-    "days": 14,
+    "days": 2,
     "folder_path": "Data"
   }
 }
