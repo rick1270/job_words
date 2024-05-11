@@ -1,4 +1,5 @@
 """Handles errors and assembles job dict"""
+
 import time
 import extract
 import spac
@@ -45,7 +46,7 @@ def check_and_extract(full_dict):
     except TypeError:
         date_posted = "Unavailable"
     try:
-        date_expires=full_dict["date_expires"]
+        date_expires = full_dict["date_expires"]
     except TypeError:
         date_expires = "Unavailable"
     except KeyError:
@@ -74,17 +75,20 @@ def check_and_extract(full_dict):
         description_list = "Unavailable"
     except TypeError:
         description_list = "Unavailable"
-    skills = spac.sentence_parse_data_words (
-        description_list, 'Data_Words/Data/snow_words.csv', 'Data_Skills'
-        )
+    skills = spac.sentence_parse_data_words(
+        description_list, "Data/snow_words.csv", "Data_Skills"
+    )
     data_skills = [x.lower() for x in skills]
-    technology = spac.sentence_parse_data_words (
-        description_list, 'Data_Words/Data/snow_words.csv', 'Data_Technology'
-        )
+    technology = spac.sentence_parse_data_words(
+        description_list, "Data/snow_words.csv", "Data_Technology"
+    )
     data_technology = [x.lower() for x in technology]
-    propers= spac.sentence_parse_proper(description_list)
-    proper_nouns = [x.lower() for x in propers
-                    if x.lower() not in data_skills and x.lower() not in data_technology]
+    propers = spac.sentence_parse_proper(description_list)
+    proper_nouns = [
+        x.lower()
+        for x in propers
+        if x.lower() not in data_skills and x.lower() not in data_technology
+    ]
     job_id = full_dict["jobId"]
     keyword = full_dict["jobKeyword"]
     search_location = full_dict["jobSearchLocation"]
@@ -109,6 +113,6 @@ def check_and_extract(full_dict):
         "description_sentences": description_list,
         "proper_nouns": proper_nouns,
         "data_skills": data_skills,
-        "data_technology": data_technology
+        "data_technology": data_technology,
     }
     return job_dict

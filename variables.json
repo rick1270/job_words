@@ -1,7 +1,9 @@
 {
-  "keyword": "snowflake",
-  "location": "Remote",
-  "api_key": "scraper_api",
-  "days": 14,
-  "folder_path": "packaging/Data"
+  "variables": {
+    "keyword": "data",
+    "location": ["Remote"],
+    "api_key": "scraper_api",
+    "days": 14,
+    "folder_path": "Data"
+  }
 }

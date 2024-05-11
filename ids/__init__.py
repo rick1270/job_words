@@ -1,12 +1,11 @@
 """Modules to retrieve and store Indeed Ids"""
 
 from datetime import datetime as dt
+import urllib3
 from bs4 import BeautifulSoup
 import store_retrieve as sr
 import names
 import scrape
-import urllib3
-
 
 
 def get_ids(r):
@@ -75,7 +74,9 @@ def just_ids(keyword=None, location=None, api_key=None, days=None, folder_path=N
             except IndexError:
                 last_id = str()
             try:
-                r = scrape.calling(keyword, location, days, api_key, last_id, page_count)
+                r = scrape.calling(
+                    keyword, location, days, api_key, last_id, page_count
+                )
             except urllib3.exceptions.ReadTimeoutError as e:
                 print(f"{e}")
                 sr.j_dump(file_name, current_id_list)
