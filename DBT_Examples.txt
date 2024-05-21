@@ -1,0 +1,72 @@
+models/staging/jaffle_shop/stg_jaffle_shop.yml
+
+Note how this is a .yml file rather than a .sql file
+
+version: 2
+
+models:
+  - name: stg_customers
+    columns: 
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_orders
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values:
+                - completed
+                - shipped
+                - returned
+                - return_pending
+                - placedtests/assert_positive_total_for_payments.sql
+
+Note how this is a .sql file in the tests directory
+
+-- Refunds have a negative amount, so the total amount should always be >= 0.
+-- Therefore return records where this isn't true to make the test fail.
+select
+    order_id,
+    sum(amount) as total_amount
+from {{ ref('stg_payments') }}
+group by 1
+having not(total_amount >= 0)
+dbt Commands
+
+Execute dbt test to run all generic and singular tests in your project.
+Execute dbt test --select test_type:generic to run only generic tests in your project.
+Execute dbt test --select test_type:singular to run only singular tests in your project.
+
+models/staging/jaffle_shop/src_jaffle_shop.yml
+
+version: 2
+
+sources:
+  - name: jaffle_shop
+    database: raw
+    schema: jaffle_shop
+    tables:
+      - name: customers
+        columns:
+          - name: id
+            tests:
+              - unique
+              - not_null
+            
+      - name: orders
+        columns:
+          - name: id
+            tests:
+              - unique              
+              - not_null
+        loaded_at_field: _etl_loaded_at
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}

@@ -13,16 +13,15 @@ from bs4 import BeautifulSoup
 import snowflake.connector
 from snowflake.connector.pandas_tools import write_pandas
 import pandas as pd
-from dotenv import load_dotenv
 import numpy as np
 import spacy
 from spacy.matcher import Matcher
 
+
 nlp = spacy.load("en_core_web_lg")
 stopwords = list(nlp.Defaults.stop_words)
 now = int(time.time() * 1000000)
-load_dotenv()
-scraper_api = os.getenv("API_KEY")
+
 # names
 
 
@@ -157,7 +156,7 @@ def zero_count(loop_count):
     return False
 
 
-def just_ids(keyw=None, locat=None, api=None, da=None, folder_path=None):
+def just_ids(keyw, locat, api, da, folder_path):
     """Assembles methods for IDs.  Save and count all.  Keyboard interupt causes end and save"""
     current_id_list = dd([])
     loop_count_list = []
@@ -195,40 +194,55 @@ def just_ids(keyw=None, locat=None, api=None, da=None, folder_path=None):
     # snot
 
 
-def df_to_table(df=None, table=None) -> dict:
+def df_to_table(
+    df,
+    sf_table_name,
+    sf_account,
+    sf_user,
+    sf_password,
+    sf_database,
+    sf_warehouse,
+    sf_schema,
+) -> dict:
     """Appends df to snowflake table or creates new table"""
-    conn = snowflake.connector.connect(
-        account=os.getenv("ACCOUNT"),
-        user=os.getenv("SF_USER"),
-        password=os.getenv("PASSWORD"),
-        role=os.getenv("ROLE"),
-        database=os.getenv("DATABASE"),
-        warehouse=os.getenv("WAREHOUSE"),
-        schema=os.getenv("SCHEMA"),
-    )
-    str_df = df.astype(str)
-    success, chunks, rows, snowflake_output = write_pandas(
-        conn=conn, df=str_df, table_name=table, auto_create_table=True
-    )
+    with snowflake.connector.connect(
+        user=sf_user,
+        password=sf_password,
+        account=sf_account,
+        warehouse=sf_warehouse,
+        database=sf_database,
+        schema=sf_schema,
+    ) as conn:
+        str_df = df.astype(str)
+        success, chunks, rows, snowflake_output = write_pandas(
+            conn=conn, df=str_df, table_name=sf_table_name, auto_create_table=True
+        )
     if success is True:
-        print(f"Success!  {rows} rows added to {table} in {chunks} chunks")
+        print(f"Success!  {rows} rows added to {sf_table_name} in {chunks} chunks")
     else:
-        print(f"DID NOT WORK! {table} \n {snowflake_output}")
+        print(f"DID NOT WORK! {sf_table_name} \n {snowflake_output}")
 
 
-def current_ids(table_name=None):
+def current_ids(
+    sf_table_name,
+    sf_account,
+    sf_user,
+    sf_password,
+    sf_database,
+    sf_warehouse,
+    sf_schema,
+):
     """retrieves existing ids to avoid duplication"""
     with snowflake.connector.connect(
-        account=os.getenv("ACCOUNT"),
-        user=os.getenv("SF_USER"),
-        password=os.getenv("PASSWORD"),
-        role=os.getenv("ROLE"),
-        database=os.getenv("DATABASE"),
-        warehouse=os.getenv("WAREHOUSE"),
-        schema=os.getenv("SCHEMA"),
+        user=sf_user,
+        password=sf_password,
+        account=sf_account,
+        warehouse=sf_warehouse,
+        database=sf_database,
+        schema=sf_schema,
     ) as conn:
         with conn.cursor() as cur:
-            cur.execute(f'select "job_id" from {table_name}')
+            cur.execute(f'select "job_id" from {sf_table_name}')
             id_list = []
             for col1 in cur:
                 idee = col1[0]
@@ -236,14 +250,14 @@ def current_ids(table_name=None):
     return id_list
 
 
-def get_job_dict(id_tuple):
+def get_job_dict(id_tuple, api):
     """Makes api call and converts html response to soup,
     extracts specific json, converts to dict return"""
     keyw = id_tuple[0]
     locat = id_tuple[1]
     id_number = id_tuple[2]
     url = id_tuple[3]
-    r = scrape(3, scraper_api, url).text
+    r = scrape(3, api, url).text  ##############################
     try:
         # create soup from r
         soup = BeautifulSoup(r, "html.parser")
@@ -271,11 +285,28 @@ def get_job_dict(id_tuple):
 
 
 # Ids ready
-def ids_warming(path, table_name):
+def ids_warming(
+    path,
+    sf_table_name,
+    sf_account,
+    sf_user,
+    sf_password,
+    sf_database,
+    sf_warehouse,
+    sf_schema,
+):
     """Extract ids from json files.  Ouput list of tuples with keyword, location, id, URL"""
     id_tuple_list = []
     # get ids that have already run
-    df_ids = current_ids(table_name)
+    df_ids = current_ids(
+        sf_table_name,
+        sf_account,
+        sf_user,
+        sf_password,
+        sf_database,
+        sf_warehouse,
+        sf_schema,
+    )
     # list of id file names
     ids = glob.glob(f"{path}/indeedIds_*.json")
     # loop through file names extract kw and location
@@ -506,16 +537,35 @@ def check_and_extract(full_dict):
     return job_dict
 
 
-def come_together(path, table_name):
+def come_together(
+    path,
+    sf_table_name,
+    api,
+    sf_account,
+    sf_user,
+    sf_password,
+    sf_database,
+    sf_warehouse,
+    sf_schema,
+):
     """runs scraped ids and returns list df"""
     dict_list = []
-    tup_list = ids_warming(path, table_name)  # returns list of id tuples  ->list
+    tup_list = ids_warming(
+        path,
+        sf_table_name=sf_table_name,
+        sf_account=sf_account,
+        sf_user=sf_user,
+        sf_password=sf_password,
+        sf_database=sf_database,
+        sf_warehouse=sf_warehouse,
+        sf_schema=sf_schema,
+    )  # returns list of id tuples  ->list
     er_count = 0
     try:
         for tup in tup_list:
             try:
                 job_dict = get_job_dict(
-                    tup
+                    tup, api
                 )  # takes one id tuple and outputs dict with data -> dict
                 new_job_dict = check_and_extract(
                     job_dict
@@ -529,11 +579,29 @@ def come_together(path, table_name):
                 er_retry = er_count * 60
                 print(f"Error has occured.  Will retry in {er_retry}")
         df_n = pd.DataFrame(dict_list)
-        df_to_table(df_n, table_name)
+        df_to_table(
+            df=df_n,
+            sf_table_name=sf_table_name,
+            sf_account=sf_account,
+            sf_user=sf_user,
+            sf_password=sf_password,
+            sf_database=sf_database,
+            sf_warehouse=sf_warehouse,
+            sf_schema=sf_schema,
+        )
         return df_n
     except KeyboardInterrupt:
         df_n = pd.DataFrame(dict_list)
-        df_to_table(df_n, table_name)
+        df_to_table(
+            df_n,
+            sf_table_name,
+            sf_account,
+            sf_user,
+            sf_password,
+            sf_database,
+            sf_warehouse,
+            sf_schema,
+        )
         return df_n
 
 
