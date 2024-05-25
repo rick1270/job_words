@@ -1,0 +1,4 @@
+{
+  "snowflake.nativeApp.enableDebugMode": true,
+  "editor.defaultFormatter": "snowflake.snowflake-vsc"
+}

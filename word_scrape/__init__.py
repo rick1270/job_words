@@ -72,34 +72,26 @@ def j_dump(file_name, ids):
 
 # scrape
 # Uses proxies and redirects to automatically scrape id html.  Requires key.
-def scrape(retries, api, url):
-    """request and return html from job listing page with retries
-    and results printed.  Single thread.  Returned html is used to
+def scrape(api, url):
+    """request and return html from job listing page ith retries
+    and results printed.  Single thread.  Returned html is wused to
     make next url.  Returns r"""
-    tries = 0
-    while tries <= retries:
+    try:
         payload = {"api_key": api, "url": url}
         print(f"Calling: {url}")
-        r = requests.get("http://api.scraperapi.com", params=payload, timeout=30)
-        try:
-            if r.headers["sa-statusCode"] == "200":
-                print(
-                    f"{r.headers['Date']}   {r.headers['sa-final-url']} \
-                      status: {r.headers['sa-statusCode']}"
-                )
-            return r
-        except KeyError:
-            print(f"{r.headers}")
-            time.sleep(300 * tries)
-            tries += 1
-        print(rf"Try {tries} of {retries} n\ {r.headers}")
-    return print(f"{url} has problems")
+        r = requests.get("http://api.scraperapi.com", params=payload, timeout=70)
+        return r
+    except TimeoutError:
+        print("FAILED API CALL")
+        return print(f"{url} has problems.  Moving forward.")
+    finally:
+        print(f"status: {r.headers['sa-statusCode']}")
 
 
 def calling(keyw, locat, da, api, last_id, page_count):
     """Bundles methods and returns id html."""
     id_url = url_next(keyw, locat, da, last_id, page_count)
-    r = scrape(3, api, id_url)
+    r = scrape(api, id_url)
     return r
 
 
@@ -191,9 +183,8 @@ def just_ids(keyw, locat, api, da, folder_path):
         Saved to: {file_name}"
     )
 
-    # snot
 
-
+# snot
 def df_to_table(
     df,
     sf_table_name,
@@ -257,7 +248,7 @@ def get_job_dict(id_tuple, api):
     locat = id_tuple[1]
     id_number = id_tuple[2]
     url = id_tuple[3]
-    r = scrape(3, api, url).text  ##############################
+    r = scrape(api, url).text
     try:
         # create soup from r
         soup = BeautifulSoup(r, "html.parser")
@@ -377,11 +368,9 @@ def sentence_parse_proper(sentences):
     return set(chain.from_iterable(col_lists))
 
 
-def pattern_lower(csv_file, column_name):
+def pattern_lower(word_list):
     """Formats column from csv file into patterns for matching"""
     pattern_list = []
-    df = pd.read_csv(csv_file)
-    word_list = list(df[column_name])
     clean_word_list = [str(t).lower().strip() for t in word_list if t is not np.nan]
     split_list = [t.split() for t in clean_word_list]
     for i in range(len(split_list)):
@@ -395,11 +384,11 @@ def pattern_lower(csv_file, column_name):
     return pattern_list
 
 
-def data_word_match(sentence, csv_file, column_name):
+def data_word_match(sentence, word_list, word_list_name):
     """Matches phrase patterns"""
     matcher = Matcher(nlp.vocab)
-    word_patterns = pattern_lower(csv_file, column_name)
-    matcher.add(column_name, word_patterns, greedy="FIRST")
+    word_patterns = pattern_lower(word_list)
+    matcher.add(word_list_name, word_patterns, greedy="FIRST")
     doc = nlp(sentence)
     matches = matcher(doc)
     words = []
@@ -412,19 +401,25 @@ def data_word_match(sentence, csv_file, column_name):
 # TODO: use lemmatization to match base words instead of exact # [fixme]
 
 
-def sentence_parse_data_words(sentences, csv_file, column_name):
+def sentence_parse_data_words(sentences, word_list, word_list_name):
     """Takes string as input and returns a list of Proper Nouns"""
     words_lists = []
     try:
         for sentence in sentences:
-            words = data_word_match(sentence, csv_file, column_name)
+            words = data_word_match(sentence, word_list, word_list_name)
             words_lists.append(words)
     except ValueError:
         words_lists.append([])
     return set(chain.from_iterable(words_lists))
 
 
-def check_and_extract(full_dict):
+def check_and_extract(
+    full_dict,
+    skill_word_table,
+    skill_word_list_column,
+    technology_word_table,
+    technology_column,
+):
     """This function is designed to catch errors in the dictionary.
     Function li_li_li_list extracts list of values.  Dict with data and lables returned
     """
@@ -494,26 +489,27 @@ def check_and_extract(full_dict):
         description_list = "Unavailable"
     except TypeError:
         description_list = "Unavailable"
-    skills = sentence_parse_data_words(
-        description_list, os.getenv("MATCH_WORDS"), os.getenv("MATCH_COLUMN_SKILLS")
+    ski = sentence_parse_data_words(
+        description_list, skill_word_table, skill_word_list_column
     )
-    skills = [x.lower() for x in skills]
-    technology = sentence_parse_data_words(
-        description_list, os.getenv("MATCH_WORDS"), os.getenv("MATCH_COLUMN_TECHNOLOGY")
+    skills = [x.lower() for x in ski]
+    tech = sentence_parse_data_words(
+        description_list, technology_word_table, technology_column
     )
-    data_technology = [x.lower() for x in technology]
+
+    technology = [x.lower() for x in tech]
     propers = sentence_parse_proper(description_list)
     proper_nouns = [
         x.lower()
         for x in propers
-        if x.lower() not in skills and x.lower() not in data_technology
+        if x.lower() not in skills and x.lower() not in technology
     ]
     job_id = full_dict["jobId"]
     keyw = full_dict["jobKeyword"]
     search_location = full_dict["jobSearchLocation"]
     print(
         f"{job_id}  {keyw}   {search_location}  {company}  {title}  {date_posted}\
-          {employment_type}  {locat}  \n  {proper_nouns} \n {skills} \n {data_technology}"
+          {employment_type}  {locat}  \n  {proper_nouns} \n {skills} \n {technology}"
     )
     job_dict = {
         "job_id": job_id,
@@ -532,7 +528,7 @@ def check_and_extract(full_dict):
         "description_sentences": description_list,
         "proper_nouns": proper_nouns,
         "data_skills": skills,
-        "data_technology": data_technology,
+        "data_technology": technology,
     }
     return job_dict
 
@@ -547,6 +543,10 @@ def come_together(
     sf_database,
     sf_warehouse,
     sf_schema,
+    skill_word_list,
+    skill_word_list_name,
+    technology_word_list,
+    technology_list_name,
 ):
     """runs scraped ids and returns list df"""
     dict_list = []
@@ -568,7 +568,11 @@ def come_together(
                     tup, api
                 )  # takes one id tuple and outputs dict with data -> dict
                 new_job_dict = check_and_extract(
-                    job_dict
+                    job_dict,
+                    skill_word_list,
+                    skill_word_list_name,
+                    technology_word_list,
+                    technology_list_name,
                 )  #  (description_list:[]) -> dict
                 # should only run ids not already in table
                 dict_list.append(new_job_dict)

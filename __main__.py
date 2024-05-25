@@ -2,6 +2,7 @@
 
 import time
 import os
+import snowflake.connector
 import word_scrape as jw
 
 now = int(time.time() * 1000000)
@@ -20,8 +21,10 @@ WAREHOUSE = os.getenv("WAREHOUSE")
 DATABASE = os.getenv("DATABASE")
 SCHEMA = os.getenv("SCHEMA")
 MATCH_WORDS = os.getenv("MATCH_WORDS")
-MATCH_COLUMN_SKILLS = os.getenv("MATCH_COLUMN_SKILLS")
-MATCH_COLUMN_TECHNOLOGY = os.getenv("MATCH_COLUMN_TECHNOLOGY")
+SF_SKILL_WORD_TABLE = os.getenv("SF_SKILL_WORD_TABLE")
+SF_TECHNOLOGY_WORD_TABLE = os.getenv("SF_TECHNOLOGY_WORD_TABLE")
+SF_MATCH_COLUMN_SKILLS = os.getenv("SF_MATCH_COLUMN_SKILLS")
+SF_MATCH_COLUMN_TECHNOLOGY = os.getenv("SF_MATCH_COLUMN_TECHNOLOGY")
 DATA_FOLDER_PATH = os.getenv("DATA_FOLDER_PATH")
 BACKUP_FOLDER = os.getenv("BACKUP_FOLDER")
 
@@ -33,6 +36,35 @@ def x_obscure(string):
         letters.append("x")
     xx = "".join(letters)
     return xx
+
+
+def get_snowflake_column(
+    sf_column_name,
+    sf_table_name,
+    sf_account,
+    sf_user,
+    sf_password,
+    sf_database,
+    sf_warehouse,
+    sf_schema,
+):
+    """gets one column from snowflake table"""
+    sql = f"select {sf_column_name} from {sf_table_name}"
+    with snowflake.connector.connect(
+        user=sf_user,
+        password=sf_password,
+        account=sf_account,
+        warehouse=sf_warehouse,
+        database=sf_database,
+        schema=sf_schema,
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            c_list = []
+            for col1 in cur:
+                c = col1[0]
+                c_list.append(c)
+    return c_list
 
 
 print(
@@ -50,17 +82,52 @@ print(
     sf_warehouse: {WAREHOUSE}
     sf_database: {DATABASE}
     sf_schema: {SCHEMA}
-    match_word_location: {MATCH_WORDS}
-    match_column_skills_name: {MATCH_COLUMN_SKILLS}
-    match_column_technology_name: {MATCH_COLUMN_TECHNOLOGY}
+    sf_skill_word_table {SF_SKILL_WORD_TABLE}
+    sf_technology_word_table {SF_TECHNOLOGY_WORD_TABLE}
+    sf_match_column_skills: {SF_MATCH_COLUMN_SKILLS}
+    sf_match_column_technology: {SF_MATCH_COLUMN_TECHNOLOGY}
     data_folder_path: {DATA_FOLDER_PATH}
     backup_folder_path: {BACKUP_FOLDER}"""
 )
 
-for lo in " ".split(LOCATION):
-    jw.just_ids(KEYWORD, lo, API_KEY, DAYS, FOLDER)
+skill_word_list = get_snowflake_column(
+    SF_MATCH_COLUMN_SKILLS,
+    SF_SKILL_WORD_TABLE,
+    ACCOUNT,
+    SF_USER,
+    PASSWORD,
+    DATABASE,
+    WAREHOUSE,
+    SCHEMA,
+)
+
+
+technology_word_list = get_snowflake_column(
+    SF_MATCH_COLUMN_TECHNOLOGY,
+    SF_TECHNOLOGY_WORD_TABLE,
+    ACCOUNT,
+    SF_USER,
+    PASSWORD,
+    DATABASE,
+    WAREHOUSE,
+    SCHEMA,
+)
+
+jw.just_ids(KEYWORD, LOCATION, API_KEY, DAYS, FOLDER)
 
 df_new = jw.come_together(
-    FOLDER, TABLE_NAME, API_KEY, ACCOUNT, SF_USER, PASSWORD, DATABASE, WAREHOUSE, SCHEMA
+    FOLDER,
+    TABLE_NAME,
+    API_KEY,
+    ACCOUNT,
+    SF_USER,
+    PASSWORD,
+    DATABASE,
+    WAREHOUSE,
+    SCHEMA,
+    skill_word_list,
+    SF_MATCH_COLUMN_SKILLS,
+    technology_word_list,
+    SF_MATCH_COLUMN_TECHNOLOGY,
 )
-df_new.to_pickle(f"{BACKUP_FOLDER}/Backup{now}")
+# df_new.to_pickle(f"{BACKUP_FOLDER}/Backup{now}")
